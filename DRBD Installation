@@ -1,0 +1,61 @@
+DRBD Installation:
+1- New Partition es muss einen Speicherplatz zur Verfügung stehen, dann führen wir fdisk aus. Auf die Konsole:
+	-fdisk /dev/sdb		# Je nachdem wie das Device heißt
+	-'n' für neue Partition
+	-'p' für primary
+	-'1' oder bei Defualt
+	-lassen wir first sector bei defualt
+	-geben wir wie Größ soll die Speicherplatz sein
+	-'t' für type der Speicherplatz
+	-'82' für linux
+	-'w' write
+	-'q' exit
+2- install drbd: Auf die Konsole:
+	-apt install drbd-utils
+	-modprobe drbd	# to load drbd module
+	-lsmod | grep drbd	# check loading
+3- DRBD Konfiguration:
+	-navigieren zu cd /etc/drbd.d/
+	-erstellen wir neue Resource Datei mit namen des Servers z.b.: server1.res
+	-in Datei schreiben wir:
+		
+		
+		resource r0 {
+        protocol C;
+        startup {
+                wfc-timeout  15;
+                degr-wfc-timeout 60;
+        }
+        net {
+                cram-hmac-alg sha1;
+                shared-secret "secret";
+        }
+        on server1 {
+                device /dev/drbd0;
+                disk /dev/sda2;
+                address 192.168.250.100:7788;
+                meta-disk internal;
+        }
+        on server2 {
+                device /dev/drbd0;
+                disk /dev/sda2;
+                address 192.168.0.110:7788;
+                meta-disk internal;
+        }
+}
+
+	-In Die global_common.conf Datei, schreiben wir:
+			
+			
+			global { usage-count no; }
+			common { syncer { rate 100M; } }
+			
+	-systemctl stop drbd	# drbd soll nicht gestartet bevor wir neue Recource data erstellen
+	-drbdadm create-md r0	# erstellen neue Resource data
+	-drbdadm attach r0		# Recource data anfügen
+	-systemctl start drbd	# starten wir drbd
+	-drbdadm -- --clear-bitmap new-current-uuid r0	# erstes Sync übersprigen
+	-drbdadm -- --overwrite-data-of-peer primary all	# set the primary node, nur auf den Master
+4- Foramtieren neue drbd Device:
+	-mkfs.ext4 /dev/drbd0
+	-mount /dev/drbd0 /Dein Datei worauf drbd schreiben soll
